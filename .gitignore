@@ -1,0 +1,29 @@
+# Terraform directories
+.terraform/
+
+# State files
+*.tfstate
+*.tfstate.backup
+*.tfstate.*.backup
+
+# Secrets
+.env
+
+# Crash logs
+crash.log
+crash.*.log
+
+# Local overrides
+*.tfvars.local
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Do NOT exclude:
+# - .terraform.lock.hcl (reproducible builds)
+# - terraform.tfvars (domain config only — secrets come from .env via env vars)
+
+import-commands.sh
+
+.claude
