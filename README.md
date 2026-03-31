@@ -1,48 +1,41 @@
+<p align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&height=220&color=F38020&text=terraform-cloudflare&fontColor=ffffff&fontAlignY=40&desc=Multi-domain%20Cloudflare%20DNS%20with%20isolated%20Terraform%20state&descAlignY=62&descAlign=50" alt="terraform-cloudflare banner" />
+</p>
+
+<p align="center">
+  <a href="https://developer.hashicorp.com/terraform/install"><img src="https://img.shields.io/badge/Terraform-%3E%3D%201.5-623CE4?logo=terraform&logoColor=white" alt="Terraform >= 1.5" /></a>
+  <a href="https://www.cloudflare.com/"><img src="https://img.shields.io/badge/Cloudflare-DNS%20%2B%20Zone%20Settings-F38020?logo=cloudflare&logoColor=white" alt="Cloudflare" /></a>
+  <img src="https://img.shields.io/badge/State-Isolated%20Per%20Domain-1F6FEB" alt="State per domain" />
+</p>
+
 # terraform-cloudflare
 
 Terraform monorepo for managing DNS records and zone settings across multiple Cloudflare domains.
 
-Each domain gets its own isolated state file stored in Cloudflare R2, while sharing a common module for consistent configuration.
+Each domain has its own isolated Terraform state in Cloudflare R2, while sharing a common module for consistent behavior.
 
-## Repository Structure
+## Table of Contents
 
-```
-.
-├── bootstrap/               # One-time setup: creates the R2 state bucket
-│   ├── main.tf
-│   ├── variables.tf
-│   └── terraform.tfvars
-├── modules/
-│   └── domain/              # Shared module: zone lookup, DNS records, SSL/TLS settings
-├── domains/
-│   └── example.com/         # Per-domain config (one directory per domain)
-│       ├── main.tf
-│       ├── variables.tf
-│       └── terraform.tfvars
-└── scripts/
-    ├── new-domain.sh        # Scaffold a new domain directory
-    └── import-domain.sh     # Import an existing domain from Cloudflare
-```
+- [Why this repo](#why-this-repo)
+- [Quick start](#quick-start)
+- [Primary workflow: Claude commands](#primary-workflow-claude-commands)
+- [Manual workflow (advanced)](#manual-workflow-advanced)
+- [Configuration reference](#configuration-reference)
+- [Repository layout](#repository-layout)
+- [Design notes](#design-notes)
 
-## Prerequisites
+## Why this repo
 
-- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
-- A Cloudflare account with a [Global API Key](https://developers.cloudflare.com/fundamentals/api/get-started/keys/)
-- An R2 API token with read/write access to the state bucket (generates an access key ID and secret)
+- 🚀 Manage many domains with one repeatable Terraform pattern
+- 🧱 Keep state isolated per domain to reduce blast radius
+- 🔁 Reuse a single shared module for DNS records and zone settings
+- ☁️ Store remote state in Cloudflare R2 (S3-compatible backend)
 
-## Environment Variables
+## Quick start
 
-| Variable | Used by | Description |
-|---|---|---|
-| `CLOUDFLARE_EMAIL` | Terraform provider, import script | Cloudflare account email |
-| `CLOUDFLARE_API_KEY` | Terraform provider, import script | [Global API Key](https://developers.cloudflare.com/fundamentals/api/get-started/keys/) |
-| `AWS_ACCESS_KEY_ID` | Terraform backend | R2 API token access key ID (R2 uses S3-compatible auth) |
-| `AWS_SECRET_ACCESS_KEY` | Terraform backend | R2 API token secret access key |
-| `TF_VAR_account_id` | Terraform variable | Cloudflare account ID (auto-mapped to `var.account_id`) |
-
-All five are Cloudflare credentials. The `AWS_*` variables are named that way because Terraform's S3 backend reads them automatically, and R2 exposes an S3-compatible API. The `TF_VAR_` prefix is a Terraform convention that auto-maps environment variables to input variables.
-
-Export these before running any Terraform or script commands:
+1. Export required credentials.
+2. Use slash commands (recommended) or run scripts directly.
+3. Plan and apply from the target domain folder.
 
 ```sh
 export CLOUDFLARE_EMAIL="your-email@example.com"
@@ -52,44 +45,47 @@ export AWS_SECRET_ACCESS_KEY="your-r2-secret-access-key"
 export TF_VAR_account_id="your-cloudflare-account-id"
 ```
 
-## Usage
+## Primary workflow: Claude commands
 
-### Recommended: Claude Commands (Primary Workflow)
-
-Use the built-in Claude slash commands from the repo root. This is the primary and preferred way to work in this repository.
+Use built-in slash commands from the repo root:
 
 ```text
 /new-domain example.com
 /import-domain example.com
 ```
 
-What these commands handle for you:
+What these commands do for you:
 
-1. Validate input and repository context
+1. Validate input and repo context
 2. Verify `.env` exists with required credentials
-3. Run the appropriate scaffolding/import script
-4. Run `terraform init` with the required R2 backend endpoint
-5. Surface generated files and next steps
+3. Run scaffolding/import logic
+4. Run `terraform init` with the required R2 endpoint
+5. Show generated files and next steps
 
-`/new-domain <domain>`
+### /new-domain <domain>
 
 - Creates `domains/<domain>/`
-- Runs `terraform init -backend-config="endpoint=https://${TF_VAR_account_id}.r2.cloudflarestorage.com"`
+- Runs:
+
+```sh
+terraform init -backend-config="endpoint=https://${TF_VAR_account_id}.r2.cloudflarestorage.com"
+```
+
 - Shows generated `terraform.tfvars`
 
-`/import-domain <domain>`
+### /import-domain <domain>
 
-- Imports existing Cloudflare DNS and zone settings into Terraform config
+- Imports existing Cloudflare DNS and zone settings
 - Generates `terraform.tfvars` and `import-commands.sh`
-- Runs init, import commands, and a final plan
+- Runs init, imports, and final plan
 
-### Manual Workflow (Advanced / Fallback)
+## Manual workflow (advanced)
 
-### Bootstrap (first-time setup)
+### 1) Bootstrap (one-time)
 
-Before adding any domains, create the R2 bucket that stores Terraform state. This only needs to be done once.
+Create the R2 bucket that stores Terraform state:
 
-1. Edit `bootstrap/terraform.tfvars` with your Cloudflare account ID
+1. Edit `bootstrap/terraform.tfvars` with your account ID
 2. Run:
 
 ```sh
@@ -98,53 +94,73 @@ terraform init
 terraform apply
 ```
 
-The bootstrap config uses local state (stored in `bootstrap/terraform.tfstate`) since the R2 bucket it creates is the remote backend for everything else.
+Note: bootstrap intentionally uses local state because it creates the remote state bucket.
 
-### Add a new domain (from scratch)
-
-If you are not using Claude commands, run the manual script directly:
+### 2) Add a new domain
 
 ```sh
 ./scripts/new-domain.sh example.com
-```
-
-This scaffolds `domains/example.com/` with `main.tf`, `variables.tf`, and a starter `terraform.tfvars`. Edit the tfvars to add your DNS records, then:
-
-```sh
 cd domains/example.com
 terraform init -backend-config="endpoint=https://${TF_VAR_account_id}.r2.cloudflarestorage.com"
 terraform plan
 terraform apply
 ```
 
-### Import an existing domain
-
-If you are not using Claude commands, run the manual import path:
-
-For domains already configured in Cloudflare, the import script fetches all current DNS records and zone settings via the API and generates the Terraform configuration to match:
+### 3) Import an existing domain
 
 ```sh
 ./scripts/import-domain.sh example.com
-```
-
-This will:
-1. Scaffold the domain directory (or prompt before overwriting an existing one)
-2. Fetch all DNS records and zone settings from the Cloudflare API
-3. Generate `terraform.tfvars` matching the current state
-4. Generate `import-commands.sh` with the `terraform import` commands for every resource
-
-Then run the imports:
-
-```sh
 cd domains/example.com
 terraform init -backend-config="endpoint=https://${TF_VAR_account_id}.r2.cloudflarestorage.com"
 bash import-commands.sh
-terraform plan  # should show no changes
+terraform plan
 ```
 
-### Day-to-day changes
+Expected result: plan should be empty (or only intentional drift).
 
-Edit `domains/<domain>/terraform.tfvars` to add, modify, or remove DNS records:
+### 4) Day-to-day changes
+
+Edit `domains/<domain>/terraform.tfvars` and apply:
+
+```sh
+cd domains/example.com
+terraform plan
+terraform apply
+```
+
+## Configuration reference
+
+### Prerequisites
+
+- [Terraform](https://developer.hashicorp.com/terraform/install) >= 1.5
+- Cloudflare account + [Global API Key](https://developers.cloudflare.com/fundamentals/api/get-started/keys/)
+- R2 API token with read/write access to state bucket
+
+### Required environment variables
+
+| Variable | Used by | Description |
+|---|---|---|
+| `CLOUDFLARE_EMAIL` | Terraform provider, import script | Cloudflare account email |
+| `CLOUDFLARE_API_KEY` | Terraform provider, import script | Cloudflare global API key |
+| `AWS_ACCESS_KEY_ID` | Terraform backend | R2 API token access key ID |
+| `AWS_SECRET_ACCESS_KEY` | Terraform backend | R2 API token secret access key |
+| `TF_VAR_account_id` | Terraform variables | Cloudflare account ID |
+
+`AWS_*` naming is required because Terraform's S3 backend reads those automatically, and R2 is S3-compatible.
+
+### DNS record fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `name` | string | required | Record name (`example.com` or `www`) |
+| `type` | string | required | Record type (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, etc.) |
+| `content` | string | required | Record value |
+| `ttl` | number | `1` | TTL in seconds (`1` = automatic) |
+| `proxied` | bool | `false` | Proxy through Cloudflare |
+| `priority` | number | `null` | Priority (required for MX) |
+| `comment` | string | `null` | Optional dashboard comment |
+
+Example:
 
 ```hcl
 dns_records = [
@@ -162,37 +178,48 @@ dns_records = [
     proxied = true
   },
   {
-    name    = "example.com"
-    type    = "MX"
-    content = "mail.example.com"
+    name     = "example.com"
+    type     = "MX"
+    content  = "mail.example.com"
     ttl      = 300
     priority = 10
   },
 ]
 ```
 
-Then apply:
-
-```sh
-cd domains/example.com
-terraform plan
-terraform apply
-```
-
-### DNS record fields
-
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `name` | string | required | Record name (FQDN like `example.com` for root, or subdomain like `www`) |
-| `type` | string | required | Record type (`A`, `AAAA`, `CNAME`, `MX`, `TXT`, etc.) |
-| `content` | string | required | Record value |
-| `ttl` | number | `1` (auto) | TTL in seconds. Use `1` for automatic (required when proxied) |
-| `proxied` | bool | `false` | Whether to proxy through Cloudflare |
-| `priority` | number | `null` | Priority (required for MX records) |
-| `comment` | string | `null` | Optional comment visible in Cloudflare dashboard |
-
 ### Zone settings
 
-The `ssl_mode` variable controls the SSL/TLS encryption mode. Valid values: `off`, `flexible`, `full`, `strict`.
+`ssl_mode` valid values: `off`, `flexible`, `full`, `strict`.
 
-Additional zone settings (always_use_https, min_tls_version, tls_1_3) use secure defaults defined in the module and can be overridden by adding the corresponding variables to the domain's `variables.tf` and `terraform.tfvars`.
+Other settings (such as `always_use_https`, `min_tls_version`, `tls_1_3`) inherit secure module defaults and can be overridden in each domain's variables/tfvars.
+
+## Repository layout
+
+```text
+.
+├── bootstrap/               # One-time setup: creates the R2 state bucket
+│   ├── main.tf
+│   ├── variables.tf
+│   └── terraform.tfvars
+├── modules/
+│   └── domain/              # Shared module: zone lookup, DNS records, SSL/TLS settings
+├── domains/
+│   └── example.com/         # Per-domain Terraform root module
+│       ├── main.tf
+│       ├── variables.tf
+│       └── terraform.tfvars
+└── scripts/
+    ├── new-domain.sh
+    └── import-domain.sh
+```
+
+## Design notes
+
+- 🔐 Per-domain isolation: each `domains/<domain>/` folder has independent state
+- 🧭 Day-to-day edits usually happen only in `terraform.tfvars`
+- 📌 Record key stability uses index-based keys; reordering DNS entries can trigger resource replacement
+- ⚠️ If backend endpoint/account config changes, rerun init with `-reconfigure`
+
+## 💡 Bonus tip: Visualize your Terraform
+
+Check out [tfviz](https://github.com/Tillman32/tfviz) — a tool for visualizing Terraform infrastructure as interactive diagrams. Handy for understanding module relationships and reviewing changes before applying.
