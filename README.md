@@ -31,6 +31,8 @@ Each domain has its own isolated Terraform state in Cloudflare R2, while sharing
 - 🔁 Reuse a single shared module for DNS records and zone settings
 - ☁️ Store remote state in Cloudflare R2 (S3-compatible backend)
 
+You can find a full write-up [HERE](https://www.brandontillman.com/blog/terraform-dns-ai) on my blog.
+
 ## Quick start
 
 1. Export required credentials.
@@ -219,7 +221,3 @@ Other settings (such as `always_use_https`, `min_tls_version`, `tls_1_3`) inheri
 - 🧭 Day-to-day edits usually happen only in `terraform.tfvars`
 - 📌 Record key stability uses index-based keys; reordering DNS entries can trigger resource replacement
 - ⚠️ If backend endpoint/account config changes, rerun init with `-reconfigure`
-
-## 💡 Bonus tip: Visualize your Terraform
-
-Check out [tfviz](https://github.com/Tillman32/tfviz) — a tool for visualizing Terraform infrastructure as interactive diagrams. Handy for understanding module relationships and reviewing changes before applying.
