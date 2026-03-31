@@ -26,4 +26,4 @@ override.tf.json
 
 import-commands.sh
 
-.claude
+./claude/settings.local.json

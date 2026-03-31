@@ -54,6 +54,37 @@ export TF_VAR_account_id="your-cloudflare-account-id"
 
 ## Usage
 
+### Recommended: Claude Commands (Primary Workflow)
+
+Use the built-in Claude slash commands from the repo root. This is the primary and preferred way to work in this repository.
+
+```text
+/new-domain example.com
+/import-domain example.com
+```
+
+What these commands handle for you:
+
+1. Validate input and repository context
+2. Verify `.env` exists with required credentials
+3. Run the appropriate scaffolding/import script
+4. Run `terraform init` with the required R2 backend endpoint
+5. Surface generated files and next steps
+
+`/new-domain <domain>`
+
+- Creates `domains/<domain>/`
+- Runs `terraform init -backend-config="endpoint=https://${TF_VAR_account_id}.r2.cloudflarestorage.com"`
+- Shows generated `terraform.tfvars`
+
+`/import-domain <domain>`
+
+- Imports existing Cloudflare DNS and zone settings into Terraform config
+- Generates `terraform.tfvars` and `import-commands.sh`
+- Runs init, import commands, and a final plan
+
+### Manual Workflow (Advanced / Fallback)
+
 ### Bootstrap (first-time setup)
 
 Before adding any domains, create the R2 bucket that stores Terraform state. This only needs to be done once.
@@ -71,6 +102,8 @@ The bootstrap config uses local state (stored in `bootstrap/terraform.tfstate`) 
 
 ### Add a new domain (from scratch)
 
+If you are not using Claude commands, run the manual script directly:
+
 ```sh
 ./scripts/new-domain.sh example.com
 ```
@@ -85,6 +118,8 @@ terraform apply
 ```
 
 ### Import an existing domain
+
+If you are not using Claude commands, run the manual import path:
 
 For domains already configured in Cloudflare, the import script fetches all current DNS records and zone settings via the API and generates the Terraform configuration to match:
 
